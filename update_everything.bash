@@ -10,4 +10,16 @@ pushd scripts
 python create_data_iphone_11.python
 popd
 
-cp open_exoplanet_catalogue/images/*.* data_images/ 
+## Images
+
+pushd oec_images
+git pull
+git checkout master
+popd
+
+rm -r data_images
+cp -r oec_images/images data_images
+
+pushd scripts
+python resizeImages.bash
+popd

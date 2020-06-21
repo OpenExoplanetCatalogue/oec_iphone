@@ -1,8 +1,4 @@
 #!/bin/bash
-rm -v ../data_images/*.iPhone*
-rm -v ../data_images/*.iPad*
-rm -v ../data_images/*.web*
-
 
 for f in ../data_images/*.png ../data_images/*.jpg ../data_images/*.jpeg
 do
