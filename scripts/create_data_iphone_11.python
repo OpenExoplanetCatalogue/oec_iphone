@@ -89,8 +89,10 @@ def databasesystems(name,description,inputdirectories):
 	return root
 
 databases = []
-databases.append(databasesystems("systems",		"Confirmed, controversial and retracted exoplanets", 	["../open_exoplanet_catalogue/systems"]))
-databases.append(databasesystems("systemskepler",	"Kepler Objects of Interest (unconfirmed)",		["../open_exoplanet_catalogue/systems_kepler"]))
+databases.append(databasesystems("systems",		     "Confirmed, controversial and retracted exoplanets from the Open Exoplanet Catalogue", 	["../open_exoplanet_catalogue/systems"]))
+databases.append(databasesystems("systems_exoplaneteu",      "Exoplanet database from exoplanet.eu", 	["../open_exoplanet_catalogue/systems_exoplaneteu"]))
+databases.append(databasesystems("systems_exoplanetarchive", "Exoplanet database from NASA Exoplanet Archive", 	["../open_exoplanet_catalogue/systems_exoplanetarchive"]))
+databases.append(databasesystems("systemskepler",	     "Kepler Objects of Interest (unconfirmed)",		["../open_exoplanet_catalogue/systems_kepler"]))
 
 root = ElementTree.Element("databases")
 for db in databases:
