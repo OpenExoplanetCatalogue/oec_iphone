@@ -52,6 +52,7 @@ def convertseparationtosemimajoraxis(planettree):
 
 def databasesystems(name,description,inputdirectories):
     numpl = 0
+    confirmedpl = 0
     systems = 0
     root = ElementTree.Element("systems")
     ## import data
@@ -63,7 +64,16 @@ def databasesystems(name,description,inputdirectories):
             convertseparationtosemimajoraxis(planettree)
 
             root.append(planettree)
-            numpl += len(planettree.findall(".//planet"))
+            planets = planettree.findall(".//planet")
+            numpl += len(planets)
+            for planet in planets:
+                confirmed = False
+                lists = planet.findall("./list")
+                for l in lists:
+                    if l.text == "Confirmed planets":
+                        confirmed = True
+                if confirmed:
+                    confirmedpl += 1
             systems +=1
 		
 	# wrap it in an ElementTree instance, and save as XML
@@ -81,6 +91,7 @@ def databasesystems(name,description,inputdirectories):
 	ElementTree.SubElement(root,"name").text		= name
 	ElementTree.SubElement(root,"description").text		= description
 	ElementTree.SubElement(root,"num").text			= str(numpl)
+	ElementTree.SubElement(root,"confirmed").text		= str(confirmedpl)
 	ElementTree.SubElement(root,"systems").text		= str(systems)
 	ElementTree.SubElement(root,"date").text		= str(datetime.date.today())
 	ElementTree.SubElement(root,"size").text		= str(os.path.getsize("../data_iphone_11/"+name+".xml"))
