@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from xml.etree import ElementTree
-import os, glob, string, csv, datetime, random,md5
+import os, glob, string, csv, datetime, random, hashlib
 import gzip
 
 # Human readable XML output
@@ -21,9 +21,8 @@ def indent(elem, level=0):
 
 # Hide empty elements
 def traverse(node):  #remove empty elements
-    children = node.getchildren()
     deleted = 0
-    for c in children:
+    for c in node:
         text = c.text
         if text == None and len(c.attrib)==0:
             #print "#############"
@@ -85,7 +84,7 @@ def databasesystems(name,description,inputdirectories):
         content = f.read()
         f.close()
         f = gzip.open("../data_iphone_11/"+name+'.xml.gz', 'wb')
-        f.write(content)
+        f.write(content.encode())
         f.close()
         root = ElementTree.Element("database")
         ElementTree.SubElement(root,"name").text		= name
@@ -96,7 +95,7 @@ def databasesystems(name,description,inputdirectories):
         ElementTree.SubElement(root,"date").text		= str(datetime.date.today())
         ElementTree.SubElement(root,"size").text		= str(os.path.getsize("../data_iphone_11/"+name+".xml"))
         ElementTree.SubElement(root,"sizecompressed").text	= str(os.path.getsize("../data_iphone_11/"+name+".xml.gz"))
-        ElementTree.SubElement(root,"hash").text 		= md5.md5(content).hexdigest()
+        ElementTree.SubElement(root,"hash").text 		= hashlib.md5(content.encode()).hexdigest()
     return root
 
 databases = []
