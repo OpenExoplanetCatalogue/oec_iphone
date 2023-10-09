@@ -1,0 +1,58 @@
+#!/usr/bin/python
+from xml.etree import ElementTree
+import mariadb
+import os, glob, string, datetime
+import collections
+from apns2.client import APNsClient
+from apns2.payload import Payload
+
+with open("pushsecrets.txt", "rt") as f:
+    user, password, hannostestid = [x.strip() for x in f.readlines()]
+
+conn = mariadb.connect(
+        user=user,
+        password=password,
+        host="127.0.0.1",
+        port=3306,
+        database="applepush"
+    )
+cur = conn.cursor()
+cur.execute("SELECT * FROM exoplanet WHERE deviceid='"+hannostestid+"'") 
+
+for p in cur:
+    print(p)
+
+
+def find_new_planets(filename,maxage=0):
+    with open(filename, 'rt') as f:
+        previousplanets = ElementTree.parse(f).getroot()
+
+    new_planets = []
+    d1 = datetime.datetime.strptime(datetime.datetime.today().strftime('%Y-%m-%d'), "%Y-%m-%d")
+    for planet in previousplanets.findall(".//planet"):
+        name = planet.findtext("./name")
+        first_seen = planet.findtext("./first_seen")
+        d2 = datetime.datetime.strptime(first_seen, "%Y-%m-%d")
+        age = (d1-d2)
+        if age.days <= maxage and first_seen!="2022-08-13":
+            new_planets.append(name)
+    return new_planets
+
+new_planets = find_new_planets("../../oec_continuity/exoplanetarchive_previous_planets.xml", maxage=30)
+
+message = "%d"% len(new_planets) + " new planets have been added to the NASA Exoplanet Archive: "+", ".join(new_planets)+"."
+maxlen = 200
+message = (message[:maxlen-3] + '...') if len(message) > maxlen else message
+
+print(message)
+
+client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
+payload = Payload(alert=message, sound="default", badge=len(new_planets))
+topic = "de.hanno-rein.exoplanet"
+client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
+Notification = collections.namedtuple('Notification', ['token', 'payload'])
+
+notifications = [Notification(payload=payload, token=hannostestid)]
+client.send_notification_batch(notifications=notifications, topic=topic)
+
+
