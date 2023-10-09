@@ -1,14 +1,23 @@
 #!/usr/bin/python
 from xml.etree import ElementTree
-import mariadb
 import os, glob, string, datetime
 import collections
 from apns2.client import APNsClient
 from apns2.payload import Payload
+client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
+topic = "de.hanno-rein.exoplanet"
+client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
+Notification = collections.namedtuple('Notification', ['token', 'payload'])
+batchsize = 10
+debug = True # Only send texts to Hanno
+
+
+today = datetime.datetime.strptime(datetime.datetime.today().strftime('%Y-%m-%d'), "%Y-%m-%d")
 
 with open("pushsecrets.txt", "rt") as f:
     user, password, hannostestid = [x.strip() for x in f.readlines()]
 
+import mariadb
 conn = mariadb.connect(
         user=user,
         password=password,
@@ -16,43 +25,74 @@ conn = mariadb.connect(
         port=3306,
         database="applepush"
     )
-cur = conn.cursor()
-cur.execute("SELECT * FROM exoplanet WHERE deviceid='"+hannostestid+"'") 
-
-for p in cur:
-    print(p)
+cur = conn.cursor(dictionary=True)
 
 
-def find_new_planets(filename,maxage=0):
+def find_new_planets(filename,maxage=30):
     with open(filename, 'rt') as f:
         previousplanets = ElementTree.parse(f).getroot()
 
     new_planets = []
-    d1 = datetime.datetime.strptime(datetime.datetime.today().strftime('%Y-%m-%d'), "%Y-%m-%d")
     for planet in previousplanets.findall(".//planet"):
         name = planet.findtext("./name")
         first_seen = planet.findtext("./first_seen")
         d2 = datetime.datetime.strptime(first_seen, "%Y-%m-%d")
-        age = (d1-d2)
+        age = (today-d2)
         if age.days <= maxage and first_seen!="2022-08-13":
-            new_planets.append(name)
+            new_planets.append((name, d2))
     return new_planets
 
-new_planets = find_new_planets("../../oec_continuity/exoplanetarchive_previous_planets.xml", maxage=30)
+def make_message(new_planets):
+    message = "%d"% len(new_planets) + " new planets have been added to the NASA Exoplanet Archive: "+", ".join(new_planets)+"."
+    maxlen = 200
+    message = (message[:maxlen-3] + '...') if len(message) > maxlen else message
+    return message
 
-message = "%d"% len(new_planets) + " new planets have been added to the NASA Exoplanet Archive: "+", ".join(new_planets)+"."
-maxlen = 200
-message = (message[:maxlen-3] + '...') if len(message) > maxlen else message
+total_sent = 0
+def send_notifications(notifications):
+    global total_sent
+    total_sent += len(notifications)
+    print("sending %d push notification. %d in total so far." % (len(notifications), total_sent))
+    if debug: # only send to Hanno
+        notifications = [n for n in notifications if n.token==hannostestid]
+    if len(notifications)>0:
+        client.send_notification_batch(notifications=notifications, topic=topic)
 
-print(message)
 
-client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
-payload = Payload(alert=message, sound="default", badge=len(new_planets))
-topic = "de.hanno-rein.exoplanet"
-client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
-Notification = collections.namedtuple('Notification', ['token', 'payload'])
 
-notifications = [Notification(payload=payload, token=hannostestid)]
-client.send_notification_batch(notifications=notifications, topic=topic)
+
+def send_push_for_database(pushlast_name, previous_planets_file):
+    new_planets = find_new_planets(previous_planets_file)
+    cur.execute("SELECT * FROM exoplanet WHERE LENGTH(`deviceid`)=64 LIMIT 1000") 
+    #cur.execute("SELECT * FROM exoplanet WHERE deviceid='"+hannostestid+"'") 
+    rows = cur.fetchall()
+    notifications = []
+    for row in rows:
+        lastpush = row[pushlast_name]
+        if lastpush is None:
+            lastpush = row["registration"]
+
+        new_planets_this_user = []
+        for name, first_seen in new_planets:
+            if (first_seen-lastpush).days >= 0:
+                new_planets_this_user.append(name)
+
+        if len(new_planets_this_user)>0:
+            message = make_message(new_planets_this_user)
+            payload = Payload(alert=message, sound="default", badge=len(new_planets_this_user))
+            notifications.append(Notification(payload=payload, token=row["deviceid"]))
+            if not debug:
+                cur.execute("UPDATE exoplanet SET `"+pushlast_name+"` = NOW() WHERE deviceid = '"+row["deviceid"]+"' LIMIT 1") 
+
+        if len(notifications)>=batchsize:
+            send_notifications(notifications)
+            notifications = []
+
+    if len(notifications)>0:
+        send_notifications(notifications)
+        notifications = []
+
+send_push_for_database("pushlast_exoplanetarchive", "../../oec_continuity/exoplanetarchive_previous_planets.xml")
+send_push_for_database("pushlast_exoplaneteu", "../../oec_continuity/exoplaneteu_previous_planets.xml")
 
 
