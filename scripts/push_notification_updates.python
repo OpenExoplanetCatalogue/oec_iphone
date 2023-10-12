@@ -63,6 +63,9 @@ def send_notifications(notifications):
 
 def send_push_for_database(pushlast_name, previous_planets_file):
     new_planets = find_new_planets(previous_planets_file)
+    if len(new_planets)==0:
+        print("No new planets in a long time.")
+        return
     cur.execute("SELECT * FROM exoplanet WHERE LENGTH(`deviceid`)=64 LIMIT 1000") 
     #cur.execute("SELECT * FROM exoplanet WHERE deviceid='"+hannostestid+"'") 
     rows = cur.fetchall()
@@ -94,5 +97,6 @@ def send_push_for_database(pushlast_name, previous_planets_file):
 
 send_push_for_database("pushlast_exoplanetarchive", "../../oec_continuity/exoplanetarchive_previous_planets.xml")
 send_push_for_database("pushlast_exoplaneteu", "../../oec_continuity/exoplaneteu_previous_planets.xml")
+send_push_for_database("pushlast_oec", "../../oec_continuity/openexoplanetcatalogue_previous_planets.xml")
 
 
