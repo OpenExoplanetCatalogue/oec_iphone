@@ -74,7 +74,30 @@ def databasesystems(name,description,inputdirectories):
                 if confirmed:
                     confirmedpl += 1
             systems +=1
-        
+       
+        previous_planets_file = None
+        planets_added = 0
+        first_seen = "1900-00-00"
+        if name=="systems_exoplaneteu":
+            previous_planets_file = "../../oec_continuity/exoplaneteu_previous_planets.xml"
+        elif name=="systems_exoplanetarchive":
+            previous_planets_file = "../../oec_continuity/exoplanetarchive_previous_planets.xml"
+        elif name=="systems":
+            previous_planets_file = "../../oec_continuity/openexoplanetcatalogue_previous_planets.xml"
+        if previous_planets_file is not None:
+            with open(previous_planets_file, 'rt') as f:
+                prev = ElementTree.parse(f).getroot()
+            planets = prev.findall(".//planet")
+            for planet in planets:
+                fs = planet.find("./first_seen").text
+                if first_seen < fs:
+                    planets_added = 1
+                    first_seen = fs
+                elif first_seen == fs:
+                    planets_added += 1
+
+
+
         # wrap it in an ElementTree instance, and save as XML
         root.attrib["name"]=name
         root.attrib["planets"]="%d"%numpl
@@ -96,6 +119,8 @@ def databasesystems(name,description,inputdirectories):
         ElementTree.SubElement(root,"size").text		= str(os.path.getsize("../data_iphone_11/"+name+".xml"))
         ElementTree.SubElement(root,"sizecompressed").text	= str(os.path.getsize("../data_iphone_11/"+name+".xml.gz"))
         ElementTree.SubElement(root,"hash").text 		= hashlib.md5(content.encode()).hexdigest()
+        ElementTree.SubElement(root,"lastplanetaddeddate").text = first_seen
+        ElementTree.SubElement(root,"lastplanetaddednum").text = str(planets_added)
     return root
 
 databases = []
