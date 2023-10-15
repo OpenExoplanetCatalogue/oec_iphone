@@ -9,7 +9,7 @@ topic = "de.hanno-rein.exoplanet"
 client = APNsClient('apns-prod.pem', use_sandbox=False, use_alternative_port=False)
 Notification = collections.namedtuple('Notification', ['token', 'payload'])
 batchsize = 10
-debug = True # Only send texts to Hanno
+debug = False #True # Only send texts to Hanno
 
 
 today = datetime.datetime.strptime(datetime.datetime.today().strftime('%Y-%m-%d'), "%Y-%m-%d")
@@ -42,10 +42,19 @@ def find_new_planets(filename,maxage=30):
             new_planets.append((name, d2))
     return new_planets
 
-def make_message(new_planets):
-    message = "%d"% len(new_planets) + " new planets have been added to the NASA Exoplanet Archive: "+", ".join(new_planets)+"."
+def make_message(new_planets, push_name):
+    if push_name == "oec":
+        dname = "the Open Exoplanet Catalogue"
+    elif push_name == "exoplaneteu":
+        dname = "the Extrasolar Planets Encyclopaedia"
+    elif push_name == "exoplanetarchive":
+        dname = "the NASA Exoplanet Archive"
+    else:
+        raise ValueError("Unknown DB")
+    message = "%d"% len(new_planets) + " new planets have been added to "+dname+": "+", ".join(new_planets)+"."
     maxlen = 200
     message = (message[:maxlen-3] + '...') if len(message) > maxlen else message
+    #print(message)
     return message
 
 total_sent = 0
@@ -53,6 +62,9 @@ def send_notifications(notifications):
     global total_sent
     total_sent += len(notifications)
     print("sending %d push notification. %d in total so far." % (len(notifications), total_sent))
+    for n in notifications:
+        if n.token == hannostestid:
+            print(n.token)
     if debug: # only send to Hanno
         notifications = [n for n in notifications if n.token==hannostestid]
     if len(notifications)>0:
@@ -61,17 +73,33 @@ def send_notifications(notifications):
 
 
 
-def send_push_for_database(pushlast_name, previous_planets_file):
+def send_push_for_database(push_name, previous_planets_file):
+    print("\nWorking on push notifications for", push_name)
     new_planets = find_new_planets(previous_planets_file)
     if len(new_planets)==0:
         print("No new planets in a long time.")
         return
-    cur.execute("SELECT * FROM exoplanet WHERE LENGTH(`deviceid`)=64 LIMIT 1000") 
+    if False:
+        cur.execute("""SELECT COUNT(*) 
+                        FROM exoplanet 
+                        WHERE LENGTH(`deviceid`)=64 
+                           AND `pushrequested_{push_name}` = 1 
+                           AND TIMESTAMPDIFF(HOUR, IFNULL(`pushlast_{push_name}`, `registration`), NOW()) >= 24 
+                        """.format(push_name=push_name)) 
+        rows = cur.fetchall()
+        for row in rows:
+            print("Total number of pushs needed: %d" %(row["COUNT(*)"]))
+    cur.execute("""SELECT * 
+                    FROM exoplanet 
+                    WHERE LENGTH(`deviceid`)=64 
+                       AND `pushrequested_{push_name}` = 1 
+                       AND TIMESTAMPDIFF(HOUR, IFNULL(`pushlast_{push_name}`, `registration`), NOW()) >= 24 
+                    LIMIT 10000""".format(push_name=push_name)) 
     #cur.execute("SELECT * FROM exoplanet WHERE deviceid='"+hannostestid+"'") 
     rows = cur.fetchall()
     notifications = []
     for row in rows:
-        lastpush = row[pushlast_name]
+        lastpush = row["pushlast_"+push_name]
         if lastpush is None:
             lastpush = row["registration"]
 
@@ -81,11 +109,11 @@ def send_push_for_database(pushlast_name, previous_planets_file):
                 new_planets_this_user.append(name)
 
         if len(new_planets_this_user)>0:
-            message = make_message(new_planets_this_user)
+            message = make_message(new_planets_this_user, push_name)
             payload = Payload(alert=message, sound="default", badge=len(new_planets_this_user))
             notifications.append(Notification(payload=payload, token=row["deviceid"]))
             if not debug:
-                cur.execute("UPDATE exoplanet SET `"+pushlast_name+"` = NOW() WHERE deviceid = '"+row["deviceid"]+"' LIMIT 1") 
+                cur.execute("UPDATE exoplanet SET `pushlast_"+push_name+"` = NOW() WHERE deviceid = '"+row["deviceid"]+"' LIMIT 1") 
 
         if len(notifications)>=batchsize:
             send_notifications(notifications)
@@ -95,8 +123,8 @@ def send_push_for_database(pushlast_name, previous_planets_file):
         send_notifications(notifications)
         notifications = []
 
-send_push_for_database("pushlast_exoplanetarchive", "../../oec_continuity/exoplanetarchive_previous_planets.xml")
-send_push_for_database("pushlast_exoplaneteu", "../../oec_continuity/exoplaneteu_previous_planets.xml")
-send_push_for_database("pushlast_oec", "../../oec_continuity/openexoplanetcatalogue_previous_planets.xml")
+send_push_for_database("exoplanetarchive", "../../oec_continuity/exoplanetarchive_previous_planets.xml")
+send_push_for_database("exoplaneteu", "../../oec_continuity/exoplaneteu_previous_planets.xml")
+send_push_for_database("oec", "../../oec_continuity/openexoplanetcatalogue_previous_planets.xml")
 
 
